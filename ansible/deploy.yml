@@ -1,0 +1,66 @@
+---
+- name: Provision and Deploy
+  hosts: servers
+  become: true
+  tasks:
+    - name: Ping hosts
+      ansible.builtin.ping:
+
+    - name: Install cockpit
+      package:
+        name: cockpit
+        state: present
+
+    - name: Install cockpit-podman
+      package:
+        name: cockpit-podman
+        state: present
+
+    - name: Enable cockpit service
+      service:
+        name: cockpit
+        state: started
+        enabled: yes
+
+    - name: Install podman
+      package:
+        name: "podman"
+        state: present
+
+    - name: Start podman service
+      systemd:
+        name: podman
+        state: started
+        enabled: yes
+
+    - name: Pull image
+      containers.podman.podman_image:
+        name: ghcr.io/anazworth/crud-example:main
+
+    - name: Open privileged port
+      become: true
+      become_user: root
+      become_method: sudo
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_unprivileged_port_start
+        value: "80"
+        sysctl_set: true
+        reload: true
+
+    - name: Run container
+      containers.podman.podman_container:
+        name: demo
+        image: ghcr.io/anazworth/crud-example:main
+        state: started
+        detach: true
+        publish: 80:8080
+
+    - name: "Disable the use of lower ports for containers again"
+      become: true
+      become_user: root
+      become_method: sudo
+      ansible.posix.sysctl:
+        name: net.ipv4.ip_unprivileged_port_start
+        value: "1024"
+        sysctl_set: true
+        reload: true
